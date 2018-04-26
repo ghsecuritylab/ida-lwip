@@ -1,5 +1,6 @@
 *.o
 *.a
+*.d
 /doc/doxygen/output/html
 /src/apps/snmp/LwipMibCompiler/CCodeGeneration/bin/
 /src/apps/snmp/LwipMibCompiler/CCodeGeneration/obj/
