@@ -368,15 +368,6 @@ err_t xemacpsif_init(struct netif *netif)
 //	resetrx_on_no_rxdata(xemacpsif);
 //}
 
-typedef struct {
-	uint32_t length;
-	void* pbuf;
-	uint8_t data[512];
-} TEST_DATA;
-
-TEST_DATA testData[100];
-uint32_t testDataIndex = 0;
-
 /*
  * The input thread calls lwIP to process any received packets.
  * This thread waits until a packet is received (sem_rx_data_available),
@@ -403,13 +394,6 @@ xemacif_input_thread(struct netif *netif)
 
 		/* points to packet payload, which starts with an Ethernet header */
 		ethhdr = p->payload;
-
-		if(p->len <= 512){
-			memcpy(testData[testDataIndex].data,p->payload,p->len);
-		}
-		testData[testDataIndex].length = p->len;
-		testData[testDataIndex].pbuf = (void*)p;
-		testDataIndex = (testDataIndex+1)%100;
 
 	#if LINK_STATS
 		lwip_stats.link.recv++;
