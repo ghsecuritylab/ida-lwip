@@ -55,22 +55,7 @@
 #include "lwip/timeouts.h"
 #include "netif/ethernet.h"
 
-#include  "gi.h"
-
-//#include "ucos_ii.h"
-
-/* Private typedef -----------------------------------------------------------*/
-/* Private define ------------------------------------------------------------*/
-/* The time to block waiting for input. */
-#define TIME_WAITING_FOR_INPUT                 ( 0 )
-/* Stack size of the interface thread */
-#define ETH_INPUT_TASK_STACK_SIZE				512
-#define ETH_INPUT_TASK_PRIO						20
-#define ETH_INPUT_TASK_NAME						"Eth Input Task"
-
-OS_STK eth_input_task_stk[ETH_INPUT_TASK_STACK_SIZE];
-
-
+#include  "gi_modules/gi_ethernet_module.h"
 
 /* Define those to better describe your network interface. */
 #define IFNAME0 's'
@@ -123,9 +108,6 @@ uint8_t Tx_Buff[ETH_TXBUFNB][ETH_TX_BUF_SIZE] __attribute__((section(".TxarraySe
 
 #endif
 
-/* Semaphore to signal incoming packets */
-OS_EVENT *newEthPacketSem = NULL;
-
 /* Global Ethernet handle*/
 ETH_HandleTypeDef EthHandle;
 
@@ -134,29 +116,6 @@ uint8_t triggerTxTimestamp = 0;
 uint64_t rxTimestampTemp = 0;
 uint64_t rxTimestamp = 0;
 uint64_t txTimestamp = 0;
-
-/* Private function prototypes -----------------------------------------------*/
-
-static err_t low_level_output(struct netif *netif, struct pbuf *p);
-
-static void ETHInputTask( void * argument );
-
-uint32_t _ethInputBuffer[2*20];
-static struct netif *ethDev;
-
-static void* _ethGlobalProcessFunction(void* data, int inputId);
-
-static int _ethDownlinkInputFunction(void* p_arg1, void* p_arg2);
-static int _ethDownlinkOutputWrapper(void* p_arg1, void* p_arg2);
-static int _ethDownlinkRouter(void* data, int inputId, void* gi_if);
-
-
-static int _ethUplink0OutputFunction(void* p_arg1, void* p_arg2);
-static int _ethUplink0InputFunction(void* p_arg1, void* p_arg2);
-static int _ethUplink1OutputFunction(void* p_arg1, void* p_arg2);
-static int _ethUplink1InputFunction(void* p_arg1, void* p_arg2);
-
-err_t etharp_output_wrapper(struct netif *netif, struct pbuf *q, const ip4_addr_t *ipaddr);
 
 /* Private functions ---------------------------------------------------------*/
 /*******************************************************************************
@@ -221,16 +180,13 @@ void HAL_ETH_MspInit(ETH_HandleTypeDef *heth)
   */
 void HAL_ETH_RxCpltCallback(ETH_HandleTypeDef *heth)
 {
-	rxTimestampTemp = TB_GetTimeLong();
-	OSSemPost(newEthPacketSem);
+//	_ethDownlinkInputFunction(NULL,NULL);
+	ethDownlinkInputFunction(NULL,NULL);
 }
 
 void HAL_ETH_TxCpltCallback(ETH_HandleTypeDef *heth)
 {
-	if(triggerTxTimestamp){
-		txTimestamp = TB_GetTimeLong();
-		triggerTxTimestamp = 0;
-	}
+
 }
 
 /*******************************************************************************
@@ -289,105 +245,11 @@ static void low_level_init(struct netif *netif)
   netif->flags |= NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP;
 
   GI_Init();
-
-  GI_TASK_DATA ethTaskData;
-  ethTaskData.p_taskStack = eth_input_task_stk;
-  ethTaskData.prio = ETH_INPUT_TASK_PRIO;
-  ethTaskData.stackSize = ETH_INPUT_TASK_STACK_SIZE;
-
-  ethDev = netif;
-
-  GI_AddInterface(0, NULL, &ethTaskData);
-
-  GI_AddDownLink(0,0,_ethDownlinkInputFunction,_ethGlobalProcessFunction,_ethDownlinkOutputWrapper,_ethDownlinkRouter);
-
-//  GI_AddUplinkQueue(0,1,(void*)&_ethInputBuffer[0],20,inFkt, _ethGlobalProcessFunction, _ethUplink0OutputFunction);
-//  GI_AddUplinkQueue(0,2,(void*)&_ethInputBuffer[10],20,inFkt, _ethGlobalProcessFunction, _ethUplink1OutputFunction);
-
-
-  /* create a binary semaphore used for informing ethernetif of frame reception */
-  newEthPacketSem = OSSemCreate(1);
-
-  OSTaskCreateExt( ETHInputTask,                              /* Create the start task                                */
-                   (void*)netif,
-                  &eth_input_task_stk[ETH_INPUT_TASK_STACK_SIZE - 1],
-                   ETH_INPUT_TASK_PRIO,
-				   ETH_INPUT_TASK_PRIO,
-                  &eth_input_task_stk[0],
-				  ETH_INPUT_TASK_STACK_SIZE,
-                   0,
-                  (OS_TASK_OPT_STK_CHK | OS_TASK_OPT_STK_CLR));
-
-#if (OS_TASK_NAME_EN > 0)
-    OSTaskNameSet(ETH_INPUT_TASK_PRIO,(INT8U *)ETH_INPUT_TASK_NAME,&err);
-#endif
+  GI_Ethernet_Init(netif);
+  GI_IPv4_Init(netif);
 
   /* Enable MAC and DMA transmission and reception */
   HAL_ETH_Start(&EthHandle);
-}
-
-struct pbuf currentPbuf;
-
-static void* _ethGlobalProcessFunction(void* data, int inputId){
-	if(inputId == 0){
-		/* MAC to ip direction */
-
-	} else {
-		/* ip to mac direction */
-
-	}
-}
-
-static int _ethDownlinkInputFunction(void* p_arg1, void* p_arg2){
-
-}
-
-static int _ethDownlinkOutputWrapper(void* p_arg1, void* p_arg2){
-	low_level_output(ethDev,(struct pbuf *)p_arg1);
-}
-
-static struct eth_addr addresses[] = {
-		ETH_ADDR(MAC_ADDR0,MAC_ADDR1,MAC_ADDR2,MAC_ADDR3,0x00,0x02),
-		ETH_ADDR(MAC_ADDR0,MAC_ADDR1,MAC_ADDR2,MAC_ADDR3,0x00,0x04),
-};
-
-static int _ethDownlinkRouter(void* data, int inputId, void* gi_if){
-	struct eth_hdr *ethhdr = (struct eth_hdr *)data;
-
-	int i = 0;
-	for (i = 0; i < 2; i++){
-		if(eth_addr_cmp(&ethhdr->dest,&addresses[i]))
-				return i;
-	}
-
-	return ((GI_INTERFACE*)gi_if)->defaultOutput->id;
-}
-
-
-static int _ethUplink0OutputFunction(void* p_arg1, void* p_arg2){
-	struct netif *netif = ethDev;
-	struct pbuf *p = (struct pbuf*)p_arg1;
-	if (netif->input( p, netif) != ERR_OK )
-	{
-		pbuf_free(p);
-	}
-}
-
-err_t etharp_output_wrapper(struct netif *netif, struct pbuf *q, const ip4_addr_t *ipaddr){
-	etharp_output(netif,q,ipaddr);
-}
-
-static int _ethUplink0InputFunction(void* p_arg1, void* p_arg2){
-
-}
-
-static int _ethUplink1OutputFunction(void* p_arg1, void* p_arg2){
-	struct pbuf *p = (struct pbuf*)p_arg1;
-	pbuf_free(p);
-}
-
-static int _ethUplink1InputFunction(void* p_arg1, void* p_arg2){
-
 }
 
 
@@ -406,7 +268,7 @@ static int _ethUplink1InputFunction(void* p_arg1, void* p_arg2){
   *       to become available since the stack doesn't retry to send a packet
   *       dropped because of memory failure (except for the TCP timers).
   */
-static err_t low_level_output(struct netif *netif, struct pbuf *p)
+err_t low_level_output(struct netif *netif, struct pbuf *p)
 {
   err_t errval;
   struct pbuf *q;
@@ -506,7 +368,7 @@ error:
   * @return a pbuf filled with the received packet (including MAC header)
   *         NULL on memory error
   */
-static struct pbuf * low_level_input(struct netif *netif)
+struct pbuf * low_level_input(struct netif *netif)
 {
   struct pbuf *p = NULL, *q = NULL;
   uint16_t len = 0;
@@ -631,7 +493,7 @@ err_t ethernetif_init(struct netif *netif)
    * from it if you have to do some checks before sending (e.g. if link
    * is available...) */
   netif->output = etharp_output;
-  netif->linkoutput = low_level_output;
+//  netif->linkoutput = low_level_output;
 
   /* initialize the hardware */
   low_level_init(netif);

@@ -691,13 +691,13 @@ ip4_input(struct pbuf *p, struct netif *inp)
       case IP_PROTO_UDPLITE:
 #endif /* LWIP_UDPLITE */
         MIB2_STATS_INC(mib2.ipindelivers);
-        udp_input(p, inp);
+        ipv4_udp_input_wrapper(p, inp);
         break;
 #endif /* LWIP_UDP */
 #if LWIP_TCP
       case IP_PROTO_TCP:
         MIB2_STATS_INC(mib2.ipindelivers);
-        tcp_input(p, inp);
+        ipv4_tcp_input_wrapper(p, inp);
         break;
 #endif /* LWIP_TCP */
 #if LWIP_ICMP
@@ -806,7 +806,7 @@ ip4_output_if_opt(struct pbuf *p, const ip4_addr_t *src, const ip4_addr_t *dest,
   return ip4_output_if_opt_src(p, src_used, dest, ttl, tos, proto, netif,
                                ip_options, optlen);
 #else /* IP_OPTIONS_SEND */
-  return ip4_output_if_src(p, src_used, dest, ttl, tos, proto, netif);
+  return ip4_output_wrapper_tcp(p, src_used, dest, ttl, tos, proto, netif);
 #endif /* IP_OPTIONS_SEND */
 }
 
@@ -994,8 +994,9 @@ ip4_output_if_opt_src(struct pbuf *p, const ip4_addr_t *src, const ip4_addr_t *d
   }
 #endif /* IP_FRAG */
 
-  LWIP_DEBUGF(IP_DEBUG, ("ip4_output_if: call netif->output()\n"));
-  return netif->output(netif, p, dest);
+//  LWIP_DEBUGF(IP_DEBUG, ("ip4_output_if: call netif->output()\n"));
+  etharp_output(netif,p,dest);
+//  return netif->output(netif, p, dest);
 }
 
 /**

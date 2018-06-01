@@ -483,7 +483,7 @@ etharp_update_arp_entry(struct netif *netif, const ip4_addr_t *ipaddr, struct et
     arp_table[i].q = NULL;
 #endif /* ARP_QUEUEING */
     /* send the queued IP packet */
-    ethernet_output(netif, p, (struct eth_addr *)(netif->hwaddr), ethaddr, ETHTYPE_IP);
+    ethernet_output_wrapper(netif, p, (struct eth_addr *)(netif->hwaddr), ethaddr, ETHTYPE_IP);
     /* free the queued IP packet */
     pbuf_free(p);
   }
@@ -766,7 +766,7 @@ etharp_output_to_arp_index(struct netif *netif, struct pbuf *q, u8_t arp_idx)
     }
   }
 
-  return ethernet_output(netif, q, (struct eth_addr *)(netif->hwaddr), &arp_table[arp_idx].ethaddr, ETHTYPE_IP);
+  return ethernet_output_wrapper(netif, q, (struct eth_addr *)(netif->hwaddr), &arp_table[arp_idx].ethaddr, ETHTYPE_IP);
 }
 
 /**
@@ -893,7 +893,7 @@ etharp_output(struct netif *netif, struct pbuf *q, const ip4_addr_t *ipaddr)
   /* continuation for multicast/broadcast destinations */
   /* obtain source Ethernet address of the given interface */
   /* send packet directly on the link */
-  return ethernet_output(netif, q, (struct eth_addr *)(netif->hwaddr), dest, ETHTYPE_IP);
+  return ethernet_output_wrapper(netif, q, (struct eth_addr *)(netif->hwaddr), dest, ETHTYPE_IP);
 }
 
 /**
@@ -995,7 +995,7 @@ etharp_query(struct netif *netif, const ip4_addr_t *ipaddr, struct pbuf *q)
     /* we have a valid IP->Ethernet address mapping */
     ETHARP_SET_ADDRHINT(netif, i);
     /* send the packet */
-    result = ethernet_output(netif, q, srcaddr, &(arp_table[i].ethaddr), ETHTYPE_IP);
+    result = ethernet_output_wrapper(netif, q, srcaddr, &(arp_table[i].ethaddr), ETHTYPE_IP);
     /* pending entry? (either just created or already pending */
   } else if (arp_table[i].state == ETHARP_STATE_PENDING) {
     /* entry is still pending, queue the given packet 'q' */
@@ -1148,11 +1148,11 @@ etharp_raw(struct netif *netif, const struct eth_addr *ethsrc_addr,
    * 'sender IP address' MUST be sent using link-layer broadcast instead of
    * link-layer unicast. (See RFC3927 Section 2.5, last paragraph) */
   if (ip4_addr_islinklocal(ipsrc_addr)) {
-    ethernet_output(netif, p, ethsrc_addr, &ethbroadcast, ETHTYPE_ARP);
+    ethernet_output_wrapper(netif, p, ethsrc_addr, &ethbroadcast, ETHTYPE_ARP);
   } else
 #endif /* LWIP_AUTOIP */
   {
-    ethernet_output(netif, p, ethsrc_addr, ethdst_addr, ETHTYPE_ARP);
+    ethernet_output_wrapper(netif, p, ethsrc_addr, ethdst_addr, ETHTYPE_ARP);
   }
 
   ETHARP_STATS_INC(etharp.xmit);

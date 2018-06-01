@@ -183,7 +183,7 @@ ethernet_input(struct pbuf *p, struct netif *netif)
         goto free_and_return;
       } else {
         /* pass to IP layer */
-        ip4_input(p, netif);
+    	  eth_ip4_input_wrapper(p, netif);
       }
       break;
 
@@ -202,7 +202,7 @@ ethernet_input(struct pbuf *p, struct netif *netif)
         goto free_and_return;
       } else {
         /* pass p to ARP module */
-        etharp_input(p, netif);
+        eth_etharp_input_wrapper(p, netif);
       }
       break;
 #endif /* LWIP_IPV4 && LWIP_ARP */
@@ -270,6 +270,7 @@ err_t
 ethernet_output(struct netif * netif, struct pbuf * p,
                 const struct eth_addr * src, const struct eth_addr * dst,
                 u16_t eth_type) {
+
   struct eth_hdr *ethhdr;
   u16_t eth_type_be = lwip_htons(eth_type);
 
@@ -309,7 +310,8 @@ ethernet_output(struct netif * netif, struct pbuf * p,
               ("ethernet_output: sending packet %p\n", (void *)p));
 
   /* send the packet */
-  return netif->linkoutput(netif, p);
+  low_level_output(netif,p);
+//  return netif->linkoutput(netif, p);
 
 pbuf_header_failed:
   LWIP_DEBUGF(ETHARP_DEBUG | LWIP_DBG_TRACE | LWIP_DBG_LEVEL_SERIOUS,
